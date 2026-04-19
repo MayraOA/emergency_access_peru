@@ -28,11 +28,7 @@ def load_district_boundaries(filepath=None) -> gpd.GeoDataFrame:
 
 
 def load_emergency_production(folder=None) -> pd.DataFrame:
-    """Load and concatenate all yearly emergency production CSV files.
-    
-    Looks for files matching emergencia_ipress_20XX.csv in data/raw/.
-    All years are combined into a single DataFrame with a 'year' column.
-    """
+    """Load and concatenate all yearly emergency production CSV files."""
     folder = Path(folder) if folder else RAW
     files = sorted(folder.glob("emergencia_ipress_*.csv"))
     if not files:
@@ -41,14 +37,22 @@ def load_emergency_production(folder=None) -> pd.DataFrame:
     dfs = []
     for f in files:
         year = f.stem.split("_")[-1]
-        try:
-            df = pd.read_csv(f, encoding="latin-1", low_memory=False)
-        except UnicodeDecodeError:
-            df = pd.read_csv(f, encoding="utf-8", low_memory=False)
-        df["year"] = year
-        dfs.append(df)
-        print(f"  [Loaded] {f.name} — {len(df)} rows")
-    
+        for encoding in ["latin-1", "utf-8", "utf-8-sig"]:
+            try:
+                df = pd.read_csv(
+                    f,
+                    encoding=encoding,
+                    low_memory=False,
+                    on_bad_lines="skip",   # skip malformed lines
+                    engine="python",       # more flexible parser
+                )
+                df["year"] = year
+                dfs.append(df)
+                print(f"  [Loaded] {f.name} — {len(df)} rows")
+                break
+            except Exception:
+                continue
+
     combined = pd.concat(dfs, ignore_index=True)
     log_summary(combined, "Emergency Production (raw, all years)")
     return combined
