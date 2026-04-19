@@ -94,6 +94,15 @@ def clean_ipress_facilities(df: pd.DataFrame) -> pd.DataFrame:
 
 def clean_emergency_production(df: pd.DataFrame) -> pd.DataFrame:
     """Clean the emergency care production dataset (all years combined)."""
+    
+    # Some files have all columns merged into one due to mixed separators.
+    # Detect and fix those columns.
+    bad_cols = [c for c in df.columns if "," in c or ";" in c]
+    if bad_cols:
+        # Keep only properly parsed columns
+        good_cols = [c for c in df.columns if "," not in c and ";" not in c]
+        df = df[good_cols].copy()
+
     df = standardize_columns(df)
     df = df.drop_duplicates()
 
@@ -103,7 +112,7 @@ def clean_emergency_production(df: pd.DataFrame) -> pd.DataFrame:
     for col in df.columns:
         if col == "year":
             continue
-        if df[col].dtype == object:
+        if df[col].dtypes == object:
             converted = pd.to_numeric(
                 df[col].astype(str).str.replace(",", ""), errors="coerce"
             )
@@ -121,13 +130,18 @@ def clean_district_boundaries(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     gdf.columns = [c.strip().lower() for c in gdf.columns]
     gdf = gdf.drop_duplicates()
 
-    for cand in ["ubigeo", "ubigeo_dis", "cod_ubigeo", "coddist"]:
-        if cand in gdf.columns:
-            gdf = gdf.rename(columns={cand: "ubigeo"})
-            break
-
-    if "ubigeo" in gdf.columns:
+    # DISTRITOS.shp uses 'iddist' as district code — build ubigeo from it
+    if "ubigeo" not in gdf.columns:
+        if "iddist" in gdf.columns:
+            gdf["ubigeo"] = gdf["iddist"].astype(str).str.zfill(6)
+        elif "codccpp" in gdf.columns:
+            gdf["ubigeo"] = gdf["codccpp"].astype(str).str.zfill(6)
+    else:
         gdf["ubigeo"] = gdf["ubigeo"].astype(str).str.zfill(6)
+
+    # Keep district name
+    if "distrito" in gdf.columns:
+        gdf["district_name"] = gdf["distrito"]
 
     if gdf.crs is None or gdf.crs.to_epsg() != 4326:
         gdf = gdf.to_crs(epsg=4326)
