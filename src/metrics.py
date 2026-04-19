@@ -1,0 +1,91 @@
+"""
+metrics.py — District-level Emergency Access Score (EAS).
+
+Baseline    : EAS = 0.33*FS + 0.33*AS + 0.34*ACS
+Alternative : EAS = 0.20*FS + 0.40*AS + 0.40*ACS
+"""
+
+import pandas as pd
+import numpy as np
+import geopandas as gpd
+from pathlib import Path
+from src.utils import save_csv, ensure_dirs
+
+PROCESSED     = Path("data/processed")
+OUTPUT_TABLES = Path("output/tables")
+
+
+def _minmax(s):
+    s = s.fillna(0)
+    rng = s.max() - s.min()
+    return pd.Series(np.zeros(len(s)), index=s.index) if rng == 0 else (s - s.min()) / rng
+
+
+def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_gdf):
+    """Construct district-level metrics and EAS scores."""
+
+    # 1. Facility count per district
+    fac_count = ipress_gdf.groupby("ubigeo").size().reset_index(name="n_facilities")
+
+    # 2. Emergency activity per district
+    emg = emergency_df.copy()
+    emg.columns = emg.columns.str.lower()
+    vol_col = next(
+        (c for c in emg.columns if any(k in c for k in ["total", "aten", "consul", "emerg", "prod"])),
+        None,
+    )
+    if vol_col is None:
+        raise ValueError(f"Could not detect emergency volume column. Columns: {list(emg.columns)}")
+    emg_agg = (
+        emg.groupby("ubigeo")[vol_col].sum().reset_index()
+           .rename(columns={vol_col: "total_emergency"})
+    )
+
+    # 3. Population and distance per district
+    pop_agg = (
+        pop_centers_gdf.groupby("ubigeo")
+        .agg(total_population=("poblacion", "sum"),
+             mean_dist_km=("dist_nearest_km", "mean"),
+             n_pop_centers=("ubigeo", "count"))
+        .reset_index()
+    )
+
+    # 4. Merge to district table
+    dist = districts_gdf[["ubigeo"]].copy()
+    if "nombdist" in districts_gdf.columns:
+        dist["district_name"] = districts_gdf["nombdist"].values
+    df = (dist.merge(fac_count, on="ubigeo", how="left")
+              .merge(emg_agg,   on="ubigeo", how="left")
+              .merge(pop_agg,   on="ubigeo", how="left"))
+    df["n_facilities"]     = df["n_facilities"].fillna(0)
+    df["total_emergency"]  = df["total_emergency"].fillna(0)
+    df["total_population"] = df["total_population"].fillna(1)
+    df["mean_dist_km"]     = df["mean_dist_km"].fillna(df["mean_dist_km"].median())
+
+    # 5. Per-capita rates
+    df["fac_per_10k"] = df["n_facilities"]    / df["total_population"] * 10_000
+    df["emg_per_10k"] = df["total_emergency"] / df["total_population"] * 10_000
+    df["inv_dist"]    = 1 / (df["mean_dist_km"] + 1)
+
+    # 6. Normalize
+    df["fs"]  = _minmax(df["fac_per_10k"])
+    df["as_"] = _minmax(df["emg_per_10k"])
+    df["acs"] = _minmax(df["inv_dist"])
+
+    # 7. Composite scores
+    df["eas_baseline"]    = 0.33*df["fs"] + 0.33*df["as_"] + 0.34*df["acs"]
+    df["eas_alternative"] = 0.20*df["fs"] + 0.40*df["as_"] + 0.40*df["acs"]
+
+    # 8. Quintile classification
+    for score_col in ["eas_baseline", "eas_alternative"]:
+        label = "quintile_" + score_col.split("_")[1]
+        df[label] = pd.qcut(
+            df[score_col].rank(method="first"), q=5,
+            labels=["Q1 (Most Underserved)", "Q2", "Q3", "Q4", "Q5 (Best Served)"],
+        )
+
+    ensure_dirs(OUTPUT_TABLES)
+    save_csv(df, PROCESSED / "district_metrics.csv")
+    save_csv(df, OUTPUT_TABLES / "district_metrics_final.csv")
+    print(f"\n[Metrics] District metrics built for {len(df)} districts.")
+    return df
