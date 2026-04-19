@@ -73,19 +73,36 @@ def clean_populated_centers(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 
 def clean_ipress_facilities(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean the IPRESS health facilities dataset."""
+    """Clean the IPRESS health facilities dataset.
+    
+    Coordinates are in UTM (NORTE/ESTE, EPSG:32718).
+    We convert them to WGS84 lat/lon.
+    """
     df = standardize_columns(df)
     df = df.drop_duplicates()
 
-    lat_col = next((c for c in df.columns if "lat" in c), None)
-    lon_col = next((c for c in df.columns if "lon" in c or "lng" in c), None)
-
-    if lat_col and lon_col:
-        df = _valid_coords(df, lat_col, lon_col)
-        df = df.rename(columns={lat_col: "latitud", lon_col: "longitud"})
-
     if "ubigeo" in df.columns:
         df["ubigeo"] = df["ubigeo"].astype(str).str.zfill(6)
+
+    # Convert UTM coordinates (norte/este) to lat/lon
+    if "norte" in df.columns and "este" in df.columns:
+        df["norte"] = pd.to_numeric(df["norte"], errors="coerce")
+        df["este"]  = pd.to_numeric(df["este"],  errors="coerce")
+        df = df.dropna(subset=["norte", "este"]).copy()
+
+        from pyproj import Transformer
+        transformer = Transformer.from_crs("EPSG:32718", "EPSG:4326", always_xy=True)
+        lon, lat = transformer.transform(df["este"].values, df["norte"].values)
+        df["longitud"] = lon
+        df["latitud"]  = lat
+
+        # Filter to Peru bounding box
+        mask = (
+            df["latitud"].between(LAT_MIN, LAT_MAX)
+            & df["longitud"].between(LON_MIN, LON_MAX)
+        )
+        print(f"  [Coords] Dropped {(~mask).sum()} IPRESS rows with invalid coordinates.")
+        df = df[mask].reset_index(drop=True)
 
     log_summary(df, "IPRESS Facilities (clean)")
     save_csv(df, PROCESSED / "ipress_clean.csv")
