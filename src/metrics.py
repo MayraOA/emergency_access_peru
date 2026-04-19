@@ -56,13 +56,12 @@ def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_
            .rename(columns={vol_col: "total_emergency"})
     )
 
-    # 3. Population and distance per district (exclude unmatched centers)
+    # 3. Populated-center count and distance per district (exclude unmatched centers)
     pop_agg = (
         _norm_ubigeo(pop_centers_gdf[pop_centers_gdf["ubigeo"].notna()])
         .groupby("ubigeo")
-        .agg(total_population=("poblacion", "sum"),
-             mean_dist_km=("dist_nearest_km", "mean"),
-             n_pop_centers=("ubigeo", "count"))
+        .agg(n_pop_centers=("ubigeo", "count"),
+             mean_dist_km=("dist_nearest_km", "mean"))
         .reset_index()
     )
 
@@ -77,22 +76,14 @@ def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_
     df = (dist.merge(fac_count, on="ubigeo", how="left")
               .merge(emg_agg,   on="ubigeo", how="left")
               .merge(pop_agg,   on="ubigeo", how="left"))
-    df["n_facilities"]     = df["n_facilities"].fillna(0)
-    df["total_emergency"]  = df["total_emergency"].fillna(0)
-    df["n_pop_centers"]    = df["n_pop_centers"].fillna(0)
-    df["total_population"] = df["total_population"].fillna(0)
-    df["mean_dist_km"]     = df["mean_dist_km"].fillna(df["mean_dist_km"].median())
+    df["n_facilities"]  = df["n_facilities"].fillna(0)
+    df["total_emergency"] = df["total_emergency"].fillna(0)
+    df["n_pop_centers"] = df["n_pop_centers"].fillna(0).clip(lower=1)
+    df["mean_dist_km"]  = df["mean_dist_km"].fillna(df["mean_dist_km"].median())
 
-    # Use n_pop_centers as population proxy when the shapefile has no census population data
-    zero_pop = df["total_population"] == 0
-    if zero_pop.any():
-        df.loc[zero_pop, "total_population"] = df.loc[zero_pop, "n_pop_centers"].clip(lower=1)
-        print(f"  [Metrics] {zero_pop.sum()} districts used n_pop_centers as population proxy.")
-    df["total_population"] = df["total_population"].clip(lower=1)
-
-    # 5. Per-capita rates
-    df["fac_per_10k"] = df["n_facilities"]    / df["total_population"] * 10_000
-    df["emg_per_10k"] = df["total_emergency"] / df["total_population"] * 10_000
+    # 5. Per-center rates (n_pop_centers used as denominator — shapefile has no census population)
+    df["fac_per_10k"] = df["n_facilities"]    / df["n_pop_centers"] * 10_000
+    df["emg_per_10k"] = df["total_emergency"] / df["n_pop_centers"] * 10_000
     df["inv_dist"]    = 1 / (df["mean_dist_km"] + 1)
 
     # 6. Normalize
