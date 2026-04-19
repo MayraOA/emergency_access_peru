@@ -28,7 +28,10 @@ def load_district_boundaries(filepath=None) -> gpd.GeoDataFrame:
 
 
 def load_emergency_production(folder=None) -> pd.DataFrame:
-    """Load and concatenate all yearly emergency production CSV files."""
+    """Load and concatenate all yearly emergency production CSV files.
+    
+    Files use semicolon as separator and latin-1 encoding.
+    """
     folder = Path(folder) if folder else RAW
     files = sorted(folder.glob("emergencia_ipress_*.csv"))
     if not files:
@@ -37,21 +40,26 @@ def load_emergency_production(folder=None) -> pd.DataFrame:
     dfs = []
     for f in files:
         year = f.stem.split("_")[-1]
-        for encoding in ["latin-1", "utf-8", "utf-8-sig"]:
+        for encoding in ["latin-1", "cp1252", "utf-8"]:
             try:
                 df = pd.read_csv(
                     f,
                     encoding=encoding,
+                    sep=";",
                     low_memory=False,
-                    on_bad_lines="skip",   # skip malformed lines
-                    engine="python",       # more flexible parser
+                    on_bad_lines="skip",
+                    engine="python",
                 )
                 df["year"] = year
                 dfs.append(df)
                 print(f"  [Loaded] {f.name} — {len(df)} rows")
                 break
-            except Exception:
+            except Exception as e:
+                print(f"  [Warning] {f.name} with {encoding}: {e}")
                 continue
+
+    if not dfs:
+        raise ValueError("No emergency files could be loaded.")
 
     combined = pd.concat(dfs, ignore_index=True)
     log_summary(combined, "Emergency Production (raw, all years)")
