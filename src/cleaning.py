@@ -88,21 +88,32 @@ def clean_ipress_facilities(df: pd.DataFrame) -> pd.DataFrame:
     if "norte" in df.columns and "este" in df.columns:
         df["norte"] = pd.to_numeric(df["norte"], errors="coerce")
         df["este"]  = pd.to_numeric(df["este"],  errors="coerce")
-        df = df.dropna(subset=["norte", "este"]).copy()
+        
+        # Drop only rows where BOTH norte and este are null
+        df_with_coords = df.dropna(subset=["norte", "este"]).copy()
+        df_no_coords   = df[df["norte"].isna() | df["este"].isna()].copy()
+        
+        print(f"  [IPRESS] {len(df_with_coords)} facilities with coordinates, {len(df_no_coords)} without.")
 
-        from pyproj import Transformer
-        transformer = Transformer.from_crs("EPSG:32718", "EPSG:4326", always_xy=True)
-        lon, lat = transformer.transform(df["este"].values, df["norte"].values)
-        df["longitud"] = lon
-        df["latitud"]  = lat
+        if len(df_with_coords) > 0:
+            from pyproj import Transformer
+            transformer = Transformer.from_crs("EPSG:32718", "EPSG:4326", always_xy=True)
+            lon, lat = transformer.transform(
+                df_with_coords["este"].values,
+                df_with_coords["norte"].values
+            )
+            df_with_coords["longitud"] = lon
+            df_with_coords["latitud"]  = lat
 
-        # Filter to Peru bounding box
-        mask = (
-            df["latitud"].between(LAT_MIN, LAT_MAX)
-            & df["longitud"].between(LON_MIN, LON_MAX)
-        )
-        print(f"  [Coords] Dropped {(~mask).sum()} IPRESS rows with invalid coordinates.")
-        df = df[mask].reset_index(drop=True)
+            # Filter to Peru bounding box
+            mask = (
+                df_with_coords["latitud"].between(LAT_MIN, LAT_MAX)
+                & df_with_coords["longitud"].between(LON_MIN, LON_MAX)
+            )
+            print(f"  [Coords] Keeping {mask.sum()} IPRESS facilities within Peru bounds.")
+            df = df_with_coords[mask].reset_index(drop=True)
+        else:
+            df = df_with_coords
 
     log_summary(df, "IPRESS Facilities (clean)")
     save_csv(df, PROCESSED / "ipress_clean.csv")

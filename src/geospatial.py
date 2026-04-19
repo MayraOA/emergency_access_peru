@@ -23,15 +23,17 @@ def points_to_geodataframe(df, lat_col="latitud", lon_col="longitud", crs=WGS84_
 
 
 def spatial_join_to_districts(points_gdf, districts_gdf, point_label="points"):
-    """Assign each point to a district via spatial join.
-    
-    Both GeoDataFrames are reprojected to EPSG:4326 (WGS84) before
-    the join to ensure consistent spatial operations.
-    """
+    """Assign each point to a district via spatial join."""
     pts  = points_gdf.to_crs(WGS84_CRS)
     dist = districts_gdf.to_crs(WGS84_CRS)
     joined = gpd.sjoin(pts, dist[["ubigeo", "geometry"]], how="left", predicate="within")
     joined = joined.drop(columns=["index_right"], errors="ignore")
+    
+    ubigeo_col = "ubigeo_left" if "ubigeo_left" in joined.columns else "ubigeo"
+    if "ubigeo_left" in joined.columns:
+        joined = joined.rename(columns={"ubigeo_left": "ubigeo"})
+        joined = joined.drop(columns=["ubigeo_right"], errors="ignore")
+    
     print(f"  [SpatialJoin] {point_label}: {len(joined)} points, {joined['ubigeo'].isna().sum()} unmatched.")
     return joined
 
