@@ -21,15 +21,30 @@ def _minmax(s):
     return pd.Series(np.zeros(len(s)), index=s.index) if rng == 0 else (s - s.min()) / rng
 
 
+def _norm_ubigeo(df):
+    """Cast ubigeo to zero-padded 6-char string, handling float-read columns."""
+    if "ubigeo" not in df.columns:
+        return df
+    df = df.copy()
+    df["ubigeo"] = (
+        df["ubigeo"].astype(str)
+            .str.replace(r"\.0$", "", regex=True)
+            .str.strip()
+            .str.zfill(6)
+    )
+    return df
+
+
 def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_gdf):
     """Construct district-level metrics and EAS scores."""
 
     # 1. Facility count per district
-    fac_count = ipress_gdf.groupby("ubigeo").size().reset_index(name="n_facilities")
+    fac_count = _norm_ubigeo(ipress_gdf).groupby("ubigeo").size().reset_index(name="n_facilities")
 
     # 2. Emergency activity per district
     emg = emergency_df.copy()
     emg.columns = emg.columns.str.lower()
+    emg = _norm_ubigeo(emg)
     vol_col = next(
         (c for c in emg.columns if any(k in c for k in ["total", "aten", "consul", "emerg", "prod"])),
         None,
@@ -43,7 +58,7 @@ def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_
 
     # 3. Population and distance per district (exclude unmatched centers)
     pop_agg = (
-        pop_centers_gdf[pop_centers_gdf["ubigeo"].notna()]
+        _norm_ubigeo(pop_centers_gdf[pop_centers_gdf["ubigeo"].notna()])
         .groupby("ubigeo")
         .agg(total_population=("poblacion", "sum"),
              mean_dist_km=("dist_nearest_km", "mean"),
@@ -52,7 +67,7 @@ def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_
     )
 
     # 4. Merge to district table
-    dist = districts_gdf[["ubigeo"]].copy()
+    dist = _norm_ubigeo(districts_gdf[["ubigeo"]].copy())
     for _name_col in ["district_name", "nombdist", "distrito"]:
         if _name_col in districts_gdf.columns:
             name_map = districts_gdf.drop_duplicates("ubigeo").set_index("ubigeo")[_name_col]
