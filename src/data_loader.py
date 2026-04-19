@@ -30,7 +30,7 @@ def load_district_boundaries(filepath=None) -> gpd.GeoDataFrame:
 def load_emergency_production(folder=None) -> pd.DataFrame:
     """Load and concatenate all yearly emergency production CSV files.
     
-    Files use semicolon as separator and latin-1 encoding.
+    Files use semicolon as separator.
     """
     folder = Path(folder) if folder else RAW
     files = sorted(folder.glob("emergencia_ipress_*.csv"))
@@ -46,9 +46,7 @@ def load_emergency_production(folder=None) -> pd.DataFrame:
                     f,
                     encoding=encoding,
                     sep=";",
-                    low_memory=False,
                     on_bad_lines="skip",
-                    engine="python",
                 )
                 df["year"] = year
                 dfs.append(df)
