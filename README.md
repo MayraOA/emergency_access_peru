@@ -49,7 +49,22 @@ streamlit run app.py
 ```
 
 ## Main Findings
-*(To be completed after running the pipeline with real data)*
+1. **Supply is geographically concentrated.** Q1 districts average 2.96 facilities per 10,000
+   population versus 5.97 in Q5 — roughly a 2× supply gap that compounds with worse access and
+   activity scores. Facility availability is heavily skewed toward Lima-Callao and Arequipa.
+
+2. **Spatial isolation is the strongest separator between quintiles.** Q1 districts average
+   9.81 km to the nearest facility versus 1.31 km for Q5, a 7.5× spatial gap. Distance
+   dominates the between-quintile variance more than facility count or emergency activity alone.
+
+3. **The most underserved districts face triple deficits.** Yaguas, Huacullani, Kelluyo, and
+   similar districts score in the bottom quintile on all three sub-scores simultaneously.
+   At the other extreme, Lima province (EAS 0.82) and Yanahuara (EAS 0.65) are the best served.
+
+4. **Rankings are robust overall, but mid-to-high performers shift under re-weighting.**
+   The baseline and alternative EAS correlate tightly across all 1,873 districts. Yanahuara
+   gains the most under the alternative specification (+0.098 delta) due to disproportionately
+   high emergency activity relative to its facility count.
 
 ## Limitations
 - Euclidean distances — not road-network.
