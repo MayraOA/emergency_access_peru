@@ -46,7 +46,7 @@ with tab1:
     st.title("Emergency Healthcare Access Inequality in Peru")
     st.markdown("""
     ## Problem Statement
-    Access to emergency healthcare is unequally distributed across Peru's ~1,874 districts.
+    Access to emergency healthcare is unequally distributed across Peru's ~1,873 districts.
     This project builds a **district-level Emergency Access Score (EAS)** to identify
     which districts are most underserved.
 
@@ -75,7 +75,7 @@ with tab1:
     | Activity Score (AS) | Emergency visits per 10,000 population | Actual utilization |
     | Access Score (ACS) | 1 / (mean distance km + 1) | Proximity of settlements |
 
-    **Baseline**: EAS = 0.33 FS + 0.33 AS + 0.34 ACS
+    **Baseline**: EAS = 0.333 FS + 0.333 AS + 0.334 ACS *(weights sum to 1; 0.334 on ACS absorbs rounding)*
     **Alternative**: EAS = 0.20 FS + 0.40 AS + 0.40 ACS
 
     ---

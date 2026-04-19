@@ -90,9 +90,10 @@ def plot_subscore_heatmap(metrics, n=30, save=True):
     across many districts, revealing which dimension drives underservice.
     """
     ensure_dirs(FIGURES)
+    name_col = "district_name" if "district_name" in metrics.columns else "ubigeo"
     df = (metrics.dropna(subset=["fs", "as_", "acs"])
           .sort_values("eas_baseline").head(n)
-          .set_index("ubigeo")[["fs", "as_", "acs"]])
+          .set_index(name_col)[["fs", "as_", "acs"]])
     df.columns = ["Facility Score", "Activity Score", "Access Score"]
     fig, ax = plt.subplots(figsize=(8, 10))
     sns.heatmap(df, cmap="RdYlGn", vmin=0, vmax=1, linewidths=0.3, ax=ax)
@@ -133,7 +134,7 @@ def build_folium_map(districts_gdf, metrics, column="eas_baseline"):
         on="ubigeo", how="left"
     ).to_crs("EPSG:4326")
 
-    m = folium.Map(location=[-9.19, -75.0], zoom_start=5, tiles="CartoDB positron")
+    m = folium.Map(location=[-9.19, -75.015], zoom_start=5, tiles="CartoDB positron")
     folium.Choropleth(
         geo_data=gdf.__geo_interface__,
         data=gdf, columns=["ubigeo", column],
