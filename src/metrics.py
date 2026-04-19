@@ -79,8 +79,16 @@ def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_
               .merge(pop_agg,   on="ubigeo", how="left"))
     df["n_facilities"]     = df["n_facilities"].fillna(0)
     df["total_emergency"]  = df["total_emergency"].fillna(0)
-    df["total_population"] = df["total_population"].fillna(1)
+    df["n_pop_centers"]    = df["n_pop_centers"].fillna(0)
+    df["total_population"] = df["total_population"].fillna(0)
     df["mean_dist_km"]     = df["mean_dist_km"].fillna(df["mean_dist_km"].median())
+
+    # Use n_pop_centers as population proxy when the shapefile has no census population data
+    zero_pop = df["total_population"] == 0
+    if zero_pop.any():
+        df.loc[zero_pop, "total_population"] = df.loc[zero_pop, "n_pop_centers"].clip(lower=1)
+        print(f"  [Metrics] {zero_pop.sum()} districts used n_pop_centers as population proxy.")
+    df["total_population"] = df["total_population"].clip(lower=1)
 
     # 5. Per-capita rates
     df["fac_per_10k"] = df["n_facilities"]    / df["total_population"] * 10_000
