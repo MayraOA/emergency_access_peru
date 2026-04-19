@@ -75,8 +75,8 @@ def clean_populated_centers(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 def clean_ipress_facilities(df: pd.DataFrame) -> pd.DataFrame:
     """Clean the IPRESS health facilities dataset.
     
-    Coordinates are in UTM (NORTE/ESTE, EPSG:32718).
-    We convert them to WGS84 lat/lon.
+    Despite column names NORTE/ESTE, coordinates are already in
+    decimal degrees (WGS84). NORTE = longitude, ESTE = latitude.
     """
     df = standardize_columns(df)
     df = df.drop_duplicates()
@@ -84,36 +84,21 @@ def clean_ipress_facilities(df: pd.DataFrame) -> pd.DataFrame:
     if "ubigeo" in df.columns:
         df["ubigeo"] = df["ubigeo"].astype(str).str.zfill(6)
 
-    # Convert UTM coordinates (norte/este) to lat/lon
     if "norte" in df.columns and "este" in df.columns:
         df["norte"] = pd.to_numeric(df["norte"], errors="coerce")
         df["este"]  = pd.to_numeric(df["este"],  errors="coerce")
-        
-        # Drop only rows where BOTH norte and este are null
-        df_with_coords = df.dropna(subset=["norte", "este"]).copy()
-        df_no_coords   = df[df["norte"].isna() | df["este"].isna()].copy()
-        
-        print(f"  [IPRESS] {len(df_with_coords)} facilities with coordinates, {len(df_no_coords)} without.")
+        df = df.dropna(subset=["norte", "este"]).copy()
 
-        if len(df_with_coords) > 0:
-            from pyproj import Transformer
-            transformer = Transformer.from_crs("EPSG:32718", "EPSG:4326", always_xy=True)
-            lon, lat = transformer.transform(
-                df_with_coords["este"].values,
-                df_with_coords["norte"].values
-            )
-            df_with_coords["longitud"] = lon
-            df_with_coords["latitud"]  = lat
+        # NORTE = longitude, ESTE = latitude
+        df["longitud"] = df["norte"]
+        df["latitud"]  = df["este"]
 
-            # Filter to Peru bounding box
-            mask = (
-                df_with_coords["latitud"].between(LAT_MIN, LAT_MAX)
-                & df_with_coords["longitud"].between(LON_MIN, LON_MAX)
-            )
-            print(f"  [Coords] Keeping {mask.sum()} IPRESS facilities within Peru bounds.")
-            df = df_with_coords[mask].reset_index(drop=True)
-        else:
-            df = df_with_coords
+        mask = (
+            df["latitud"].between(LAT_MIN, LAT_MAX)
+            & df["longitud"].between(LON_MIN, LON_MAX)
+        )
+        print(f"  [Coords] Keeping {mask.sum()} IPRESS facilities within Peru bounds.")
+        df = df[mask].reset_index(drop=True)
 
     log_summary(df, "IPRESS Facilities (clean)")
     save_csv(df, PROCESSED / "ipress_clean.csv")
