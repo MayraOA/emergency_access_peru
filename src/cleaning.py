@@ -27,66 +27,111 @@ def _valid_coords(df, lat_col, lon_col):
     return df[mask].reset_index(drop=True)
 
 
-def clean_populated_centers(df):
-    df = standardize_columns(df)
-    df = df.drop_duplicates()
-    lat_col = next((c for c in df.columns if "lat" in c), None)
-    lon_col = next((c for c in df.columns if "lon" in c or "lng" in c), None)
-    if lat_col and lon_col:
-        df = _valid_coords(df, lat_col, lon_col)
-        df = df.rename(columns={lat_col: "latitud", lon_col: "longitud"})
-    if "ubigeo" in df.columns:
-        df["ubigeo"] = df["ubigeo"].astype(str).str.zfill(6)
-    if "poblacion" in df.columns:
-        df["poblacion"] = pd.to_numeric(df["poblacion"], errors="coerce").fillna(0).astype(int)
-    log_summary(df, "Populated Centers (clean)")
-    ensure_dirs(PROCESSED)
-    save_csv(df, PROCESSED / "centros_poblados_clean.csv")
-    return df
-
-
-def clean_ipress_facilities(df):
-    df = standardize_columns(df)
-    df = df.drop_duplicates()
-    lat_col = next((c for c in df.columns if "lat" in c), None)
-    lon_col = next((c for c in df.columns if "lon" in c or "lng" in c), None)
-    if lat_col and lon_col:
-        df = _valid_coords(df, lat_col, lon_col)
-        df = df.rename(columns={lat_col: "latitud", lon_col: "longitud"})
-    if "ubigeo" in df.columns:
-        df["ubigeo"] = df["ubigeo"].astype(str).str.zfill(6)
-    log_summary(df, "IPRESS Facilities (clean)")
-    save_csv(df, PROCESSED / "ipress_clean.csv")
-    return df
-
-
-def clean_emergency_production(df):
-    df = standardize_columns(df)
-    df = df.drop_duplicates()
-    if "ubigeo" in df.columns:
-        df["ubigeo"] = df["ubigeo"].astype(str).str.zfill(6)
-    for col in df.columns:
-        if df[col].dtype == object:
-            converted = pd.to_numeric(df[col].astype(str).str.replace(",", ""), errors="coerce")
-            if converted.notna().mean() > 0.5:
-                df[col] = converted
-    log_summary(df, "Emergency Production (clean)")
-    save_csv(df, PROCESSED / "emergencia_clean.csv")
-    return df
-
-
-def clean_district_boundaries(gdf):
+def clean_populated_centers(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Clean the Centros Poblados shapefile."""
     gdf = gdf.copy()
     gdf.columns = [c.strip().lower() for c in gdf.columns]
     gdf = gdf.drop_duplicates()
-    for cand in ["ubigeo", "ubigeo_dis", "cod_ubigeo", "coddist"]:
+
+    # Reproject to WGS84
+    if gdf.crs is None or gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs(epsg=4326)
+
+    # Extract lat/lon from geometry
+    gdf["longitud"] = gdf.geometry.x
+    gdf["latitud"]  = gdf.geometry.y
+
+    # Normalize ubigeo if present
+    ubigeo_candidates = ["ubigeo", "cod_ubigeo", "codigou"]
+    for cand in ubigeo_candidates:
         if cand in gdf.columns:
             gdf = gdf.rename(columns={cand: "ubigeo"})
             break
     if "ubigeo" in gdf.columns:
         gdf["ubigeo"] = gdf["ubigeo"].astype(str).str.zfill(6)
+
+    # Normalize population column
+    pop_candidates = ["poblacion", "pob_censo", "población", "pob"]
+    for cand in pop_candidates:
+        if cand in gdf.columns:
+            gdf = gdf.rename(columns={cand: "poblacion"})
+            break
+    if "poblacion" in gdf.columns:
+        gdf["poblacion"] = pd.to_numeric(gdf["poblacion"], errors="coerce").fillna(0).astype(int)
+    else:
+        gdf["poblacion"] = 0
+
+    log_summary(gdf, "Populated Centers (clean)")
+    ensure_dirs(PROCESSED)
+    # Save as GeoPackage and also as CSV for later use
+    gdf.to_file(PROCESSED / "centros_poblados_clean.gpkg", driver="GPKG")
+    save_csv(
+        gdf.drop(columns="geometry"),
+        PROCESSED / "centros_poblados_clean.csv"
+    )
+    return gdf
+
+
+def clean_ipress_facilities(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean the IPRESS health facilities dataset."""
+    df = standardize_columns(df)
+    df = df.drop_duplicates()
+
+    lat_col = next((c for c in df.columns if "lat" in c), None)
+    lon_col = next((c for c in df.columns if "lon" in c or "lng" in c), None)
+
+    if lat_col and lon_col:
+        df = _valid_coords(df, lat_col, lon_col)
+        df = df.rename(columns={lat_col: "latitud", lon_col: "longitud"})
+
+    if "ubigeo" in df.columns:
+        df["ubigeo"] = df["ubigeo"].astype(str).str.zfill(6)
+
+    log_summary(df, "IPRESS Facilities (clean)")
+    save_csv(df, PROCESSED / "ipress_clean.csv")
+    return df
+
+
+def clean_emergency_production(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean the emergency care production dataset (all years combined)."""
+    df = standardize_columns(df)
+    df = df.drop_duplicates()
+
+    if "ubigeo" in df.columns:
+        df["ubigeo"] = df["ubigeo"].astype(str).str.zfill(6)
+
+    for col in df.columns:
+        if col == "year":
+            continue
+        if df[col].dtype == object:
+            converted = pd.to_numeric(
+                df[col].astype(str).str.replace(",", ""), errors="coerce"
+            )
+            if converted.notna().mean() > 0.5:
+                df[col] = converted
+
+    log_summary(df, "Emergency Production (clean)")
+    save_csv(df, PROCESSED / "emergencia_clean.csv")
+    return df
+
+
+def clean_district_boundaries(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Standardize the district boundaries GeoDataFrame."""
+    gdf = gdf.copy()
+    gdf.columns = [c.strip().lower() for c in gdf.columns]
+    gdf = gdf.drop_duplicates()
+
+    for cand in ["ubigeo", "ubigeo_dis", "cod_ubigeo", "coddist"]:
+        if cand in gdf.columns:
+            gdf = gdf.rename(columns={cand: "ubigeo"})
+            break
+
+    if "ubigeo" in gdf.columns:
+        gdf["ubigeo"] = gdf["ubigeo"].astype(str).str.zfill(6)
+
     if gdf.crs is None or gdf.crs.to_epsg() != 4326:
         gdf = gdf.to_crs(epsg=4326)
+
     print("  [CRS] District boundaries reprojected to EPSG:4326 (WGS84)")
     log_summary(gdf, "District Boundaries (clean)")
     gdf.to_file(PROCESSED / "distritos_clean.gpkg", driver="GPKG")
