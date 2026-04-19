@@ -2,6 +2,7 @@
 geospatial.py — Spatial joins and distance calculations.
 """
 
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 from pathlib import Path
@@ -44,15 +45,23 @@ def compute_nearest_facility_distance(centers_gdf, facilities_gdf):
     Uses EPSG:32718 (UTM Zone 18S) — a metric CRS covering Peru —
     so distances are in meters, then converted to kilometers.
     """
-    centers_m    = centers_gdf.to_crs(METRIC_CRS).copy()
-    facilities_m = facilities_gdf.to_crs(METRIC_CRS).copy()
-    nearest_idx  = facilities_m.geometry.sindex.nearest(centers_m.geometry, return_all=False)
-    nearest_geom = facilities_m.geometry.iloc[nearest_idx].values
-    centers_m["dist_nearest_km"] = [
-        c.distance(n) / 1000 for c, n in zip(centers_m.geometry, nearest_geom)
-    ]
+    centers_m    = centers_gdf.to_crs(METRIC_CRS).reset_index(drop=True)
+    facilities_m = facilities_gdf.to_crs(METRIC_CRS).reset_index(drop=True)
+
+    # sindex.nearest returns (input_indices, tree_indices) in GeoPandas >= 0.12
+    input_idx, result_idx = facilities_m.sindex.nearest(
+        centers_m.geometry, return_all=False
+    )
+
+    centers_geom    = centers_m.geometry.values[input_idx]
+    facilities_geom = facilities_m.geometry.values[result_idx]
+    distances = np.array([c.distance(f) / 1000 for c, f in zip(centers_geom, facilities_geom)])
+
+    dist_arr = np.full(len(centers_m), np.nan)
+    dist_arr[input_idx] = distances
+
     result = centers_gdf.copy()
-    result["dist_nearest_km"] = centers_m["dist_nearest_km"].values
+    result["dist_nearest_km"] = dist_arr
     return result
 
 

@@ -41,9 +41,10 @@ def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_
            .rename(columns={vol_col: "total_emergency"})
     )
 
-    # 3. Population and distance per district
+    # 3. Population and distance per district (exclude unmatched centers)
     pop_agg = (
-        pop_centers_gdf.groupby("ubigeo")
+        pop_centers_gdf[pop_centers_gdf["ubigeo"].notna()]
+        .groupby("ubigeo")
         .agg(total_population=("poblacion", "sum"),
              mean_dist_km=("dist_nearest_km", "mean"),
              n_pop_centers=("ubigeo", "count"))
@@ -52,8 +53,12 @@ def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_
 
     # 4. Merge to district table
     dist = districts_gdf[["ubigeo"]].copy()
-    if "nombdist" in districts_gdf.columns:
-        dist["district_name"] = districts_gdf["nombdist"].values
+    for _name_col in ["district_name", "nombdist", "distrito"]:
+        if _name_col in districts_gdf.columns:
+            name_map = districts_gdf.drop_duplicates("ubigeo").set_index("ubigeo")[_name_col]
+            dist = dist.copy()
+            dist["district_name"] = dist["ubigeo"].map(name_map)
+            break
     df = (dist.merge(fac_count, on="ubigeo", how="left")
               .merge(emg_agg,   on="ubigeo", how="left")
               .merge(pop_agg,   on="ubigeo", how="left"))

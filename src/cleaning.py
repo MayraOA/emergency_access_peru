@@ -125,7 +125,7 @@ def clean_emergency_production(df: pd.DataFrame) -> pd.DataFrame:
     for col in df.columns:
         if col == "year":
             continue
-        if df[col].dtypes == object:
+        if df[col].dtype == object:
             converted = pd.to_numeric(
                 df[col].astype(str).str.replace(",", ""), errors="coerce"
             )
