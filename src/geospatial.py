@@ -27,7 +27,10 @@ def spatial_join_to_districts(points_gdf, districts_gdf, point_label="points"):
     """Assign each point to a district via spatial join."""
     pts  = points_gdf.to_crs(WGS84_CRS)
     dist = districts_gdf.to_crs(WGS84_CRS)
-    joined = gpd.sjoin(pts, dist[["ubigeo", "geometry"]], how="left", predicate="within")
+    # Use "intersects" so points that fall exactly on a district boundary are still assigned.
+    # Note: urban districts (e.g. Lima) showing n_pop_centers=1 is a data limitation —
+    # the IGN 1:100K shapefile records only one populated center per small urban district.
+    joined = gpd.sjoin(pts, dist[["ubigeo", "geometry"]], how="left", predicate="intersects")
     joined = joined.drop(columns=["index_right"], errors="ignore")
     
     ubigeo_col = "ubigeo_left" if "ubigeo_left" in joined.columns else "ubigeo"

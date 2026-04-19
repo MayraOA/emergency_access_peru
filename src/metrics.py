@@ -41,10 +41,16 @@ def build_district_metrics(pop_centers_gdf, ipress_gdf, emergency_df, districts_
     # 1. Facility count per district
     fac_count = _norm_ubigeo(ipress_gdf).groupby("ubigeo").size().reset_index(name="n_facilities")
 
-    # 2. Emergency activity per district
+    # 2. Emergency activity per district — use most recent complete year only (2024)
+    # Summing across all years inflates AS for facilities with longer records and
+    # makes newer vs. older facilities incomparable on a single cross-section.
     emg = emergency_df.copy()
     emg.columns = emg.columns.str.lower()
     emg = _norm_ubigeo(emg)
+    if "year" in emg.columns:
+        latest_year = 2024
+        emg = emg[emg["year"].astype(str) == str(latest_year)]
+        print(f"  [Metrics] Emergency data filtered to year {latest_year}: {len(emg):,} rows.")
     vol_col = next(
         (c for c in emg.columns if any(k in c for k in ["total", "aten", "consul", "emerg", "prod"])),
         None,
