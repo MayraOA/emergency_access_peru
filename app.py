@@ -58,6 +58,7 @@ with tab1:
     | District Boundaries | DISTRITOS.shp (GitHub) | ubigeo, geometry |
     | Emergency Production | datos.susalud.gob.pe | ubigeo, emergency visits |
     | IPRESS Facilities | datosabiertos.gob.pe — MINSA | ubigeo, lat, lon |
+    | GeoPandas methodology reference | [d2cml-ai GitHub](https://github.com/d2cml-ai/Data-Science-Python/blob/main/Lectures/Lecture_5/Geopandas1.ipynb) | spatial join and CRS handling patterns |
 
     ---
     ## Cleaning Summary

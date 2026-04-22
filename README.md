@@ -15,6 +15,37 @@ and what evidence supports that conclusion.
 | District Boundaries | DISTRITOS.shp — d2cml-ai GitHub |
 | Emergency Production by IPRESS | datos.susalud.gob.pe |
 | IPRESS Health Facilities | datosabiertos.gob.pe — MINSA |
+| GeoPandas methodology reference | d2cml-ai GitHub — spatial join and CRS handling patterns |
+
+## Data Download Instructions
+
+### 1. Populated Centers shapefile
+- **URL:** https://www.datosabiertos.gob.pe/dataset/dataset-centros-poblados
+- **Save to:** `data/raw/`
+- **Files to download (keep original filenames):**
+  `CCPP_IGN100K.cpg`, `CCPP_IGN100K.dbf`, `CCPP_IGN100K.prj`, `CCPP_IGN100K.sbn`,
+  `CCPP_IGN100K.sbx`, `CCPP_IGN100K.shp`, `CCPP_IGN100K.shp.xml`, `CCPP_IGN100K.shx`
+- **Note:** All eight sidecar files must be present in the same directory for the shapefile to load correctly.
+
+### 2. District Boundaries shapefile
+- **URL:** https://github.com/d2cml-ai/Data-Science-Python/tree/main/_data/Folium
+- **Save to:** `data/raw/`
+- **Files to download (keep original filenames):**
+  `DISTRITOS.shp`, `DISTRITOS.dbf`, `DISTRITOS.prj`, `DISTRITOS.shx`
+- **Note:** Download each file individually via the "Raw" button on GitHub, or clone the repository and copy the four files from `_data/Folium/`.
+
+### 3. Emergency Production CSVs
+- **URL:** http://datos.susalud.gob.pe/dataset/consulta-c1-produccion-asistencial-en-emergencia-por-ipress
+- **Save to:** `data/raw/`
+- **Filename convention:** Rename each yearly file to `emergencia_ipress_YYYY.csv`
+  (e.g. `emergencia_ipress_2024.csv`). The pipeline will auto-detect all files matching
+  `emergencia_ipress_*.csv`.
+- **Note:** Files use semicolon (`;`) as the column separator and latin-1 encoding. Do not open and re-save in Excel, as this may corrupt the encoding.
+
+### 4. IPRESS Health Facilities
+- **URL:** https://www.datosabiertos.gob.pe/dataset/minsa-ipress
+- **Save to:** `data/raw/ipress_minsa.csv`
+- **Note:** The coordinate columns are labelled `NORTE` and `ESTE` but contain decimal-degree values (WGS84), not UTM. The pipeline handles the remapping automatically.
 
 ## Data Cleaning
 - Column names standardized (lowercase + underscores).
